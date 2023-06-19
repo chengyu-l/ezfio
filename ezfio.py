@@ -1046,6 +1046,15 @@ def DefineTests():
     iodepth = 1
     AddTestBSShmoo()
 
+    testname = "Sustained Multi-Threaded Sequential Write Tests by Block Size"
+    seqrand = "Seq"
+    wmix = 100
+    threads = 4
+    runtime = shorttime
+    iops_log = False
+    iodepth = 256
+    AddTestBSShmoo()
+
     if not fastPrecond:
         AddTest('Random Preconditioning', 'Preparation', '', '', '', '', '', '',
                 '', lambda o: {})  # Only for display on-screen
