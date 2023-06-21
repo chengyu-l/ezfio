@@ -231,31 +231,32 @@ WARNING: All data on the target device will be DESTROYED by this test.""")
     # Sanity check that the selected drive is not mounted by parsing mounts
     # This is not guaranteed to catch all as there's just too many different
     # naming conventions out there.  Let's cover simple HDD/SSD/NVME patterns
-    pdispart = (re.match('.*p?[1-9][0-9]*$', physDrive) and
-                not re.match('.*/nvme[0-9]+n[1-9][0-9]*$', physDrive))
-    hit = ""
-    with open("/proc/mounts", "r") as f:
-        mounts = f.readlines()
-    for l in mounts:
-        dev = l.split()[0]
-        mnt = l.split()[1]
-        if dev == physDrive:
-            hit = dev + " on " + mnt  # Obvious exact match
-        if pdispart:
-            chkdev = dev
-        else:
-            # /dev/sdp# is special case, don't remove the "p"
-            if re.match('^/dev/sdp.*$', dev):
-                chkdev = re.sub('[1-9][0-9]*$', '', dev)
-            else:
-                # Need to see if mounted partition is on a raw device being tested
-                chkdev = re.sub('p?[1-9][0-9]*$', '', dev)
-        if chkdev == physDrive:
-            hit = dev + " on " + mnt
-    if hit != "":
-        print("ERROR:  Mounted volume '" + str(hit) + "' is on same device" +
-              "as tested device '" + str(physDrive) + "'.  ABORTING.")
-        sys.exit(2)
+    #
+    # pdispart = (re.match('.*p?[1-9][0-9]*$', physDrive) and
+    #             not re.match('.*/nvme[0-9]+n[1-9][0-9]*$', physDrive))
+    # hit = ""
+    # with open("/proc/mounts", "r") as f:
+    #     mounts = f.readlines()
+    # for l in mounts:
+    #     dev = l.split()[0]
+    #     mnt = l.split()[1]
+    #     if dev == physDrive:
+    #         hit = dev + " on " + mnt  # Obvious exact match
+    #     if pdispart:
+    #         chkdev = dev
+    #     else:
+    #         # /dev/sdp# is special case, don't remove the "p"
+    #         if re.match('^/dev/sdp.*$', dev):
+    #             chkdev = re.sub('[1-9][0-9]*$', '', dev)
+    #         else:
+    #             # Need to see if mounted partition is on a raw device being tested
+    #             chkdev = re.sub('p?[1-9][0-9]*$', '', dev)
+    #     if chkdev == physDrive:
+    #         hit = dev + " on " + mnt
+    # if hit != "":
+    #     print("ERROR:  Mounted volume '" + str(hit) + "' is on same device" +
+    #           "as tested device '" + str(physDrive) + "'.  ABORTING.")
+    #     sys.exit(2)
 
 
 def grep(inlist, regex):
@@ -477,9 +478,11 @@ def TestName(seqrand, wmix, bs, threads, iodepth):
 def SequentialConditioning():
     """Sequentially fill the complete capacity of the drive once."""
     global quickie, fastPrecond, nullio, readOnly, compressPct
-
+    
     def GenerateJobfile(drive, testcapacity, testoffset):
+        print("SequentialConditioning " + drive)
         """Write the sequential jobfile for a single server"""
+
         jobfile = tempfile.NamedTemporaryFile(delete=False, mode='w')
         for dr in drive.split(','):
             jobfile.write("[SeqCond-" + dr + "]\n")
@@ -487,13 +490,17 @@ def SequentialConditioning():
             # to run for a specified # of bytes, not a specified # of seconds.
             jobfile.write("readwrite=write\n")
             jobfile.write("bs=128k\n")
-            if nullio:
-                jobfile.write("ioengine=null\n")
-            else:
-                jobfile.write("ioengine=libaio\n")
+            # if nullio:
+            #     jobfile.write("ioengine=null\n")
+            # else:
+            #     jobfile.write("ioengine=libaio\n")
+            jobfile.write("ioengine=rbd\n")
+            jobfile.write("clientname=admin\n")
+            jobfile.write("pool=perf_test\n")
+            jobfile.write("rbdname=test2.img\n")
             jobfile.write("iodepth=64\n")
             jobfile.write("direct=1\n")
-            jobfile.write("filename=" + str(dr) + "\n")
+            # jobfile.write("filename=" + str(dr) + "\n")
             if quickie:
                 jobfile.write("size=1G\n")
             else:
@@ -517,7 +524,7 @@ def SequentialConditioning():
             cmdline = cmdline + ['--client=' + str(host), str(newjob.name)]
             jobfile = jobfile + [newjob]
     cmdline = cmdline + ['--output-format=' + str(fioOutputFormat)]
-
+    print("Run cmd1:", cmdline)
     if not readOnly:
         code, out, err = Run(cmdline)
     else:
@@ -541,6 +548,7 @@ def RandomConditioning():
 
     def GenerateJobfile(drive, testcapacity, testoffset):
         """Write the random jobfile"""
+        print("RandomConditioning GenerateJobfile " + drive)
         jobfile = tempfile.NamedTemporaryFile(delete=False, mode='w')
         for dr in drive.split(','):
             jobfile.write("[RandCond-" + dr + "]\n")
@@ -552,15 +560,19 @@ def RandomConditioning():
             jobfile.write("end_fsync=0\n")
             jobfile.write("group_reporting=1\n")
             jobfile.write("direct=1\n")
-            jobfile.write("filename=" + str(dr) + "\n")
+            # jobfile.write("filename=" + str(dr) + "\n")
             if quickie:
                 jobfile.write("size=1G\n")
             else:
                 jobfile.write("size=" + str(testcapacity) + "G\n")
-            if nullio:
-                jobfile.write("ioengine=null\n")
-            else:
-                jobfile.write("ioengine=libaio\n")
+            # if nullio:
+            #     jobfile.write("ioengine=null\n")
+            # else:
+            #     jobfile.write("ioengine=libaio\n")
+            jobfile.write("ioengine=rbd\n")
+            jobfile.write("clientname=admin\n")
+            jobfile.write("pool=perf_test\n")
+            jobfile.write("rbdname=test2.img\n")
             jobfile.write("iodepth=256\n")
             jobfile.write("norandommap\n")
             jobfile.write("randrepeat=0\n")
@@ -583,7 +595,7 @@ def RandomConditioning():
             cmdline = cmdline + ['--client=' + str(host), str(newjob.name)]
             jobfile = jobfile + [newjob]
     cmdline = cmdline + ['--output-format=' + str(fioOutputFormat)]
-
+    print("Run cmd2:", cmdline)
     if not readOnly:
         code, out, err = Run(cmdline)
     else:
@@ -682,6 +694,7 @@ def RunTest(iops_log, seqrand, wmix, bs, threads, iodepth, runtime):
         """Make a jobfile for the specified test parameters"""
         global verify, nullio
         jobfile = tempfile.NamedTemporaryFile(delete=False, mode='w')
+        print("RunTest GenerateJobfile " + drive)
         for dr in drive.split(","):
             jobfile.write("[test-" + dr + "]\n")
             jobfile.write("readwrite=" + str(rw) + "\n")
@@ -695,10 +708,14 @@ def RunTest(iops_log, seqrand, wmix, bs, threads, iodepth, runtime):
             jobfile.write("size=" + str(testcapacity) + "G\n")
             jobfile.write("time_based=1\n")
             jobfile.write("runtime=" + str(runtime) + "\n")
-            if nullio:
-                jobfile.write("ioengine=null\n")
-            else:
-                jobfile.write("ioengine=libaio\n")
+            # if nullio:
+            #     jobfile.write("ioengine=null\n")
+            # else:
+            #     jobfile.write("ioengine=libaio\n")
+            jobfile.write("ioengine=rbd\n")
+            jobfile.write("clientname=admin\n")
+            jobfile.write("pool=perf_test\n")
+            jobfile.write("rbdname=test2.img\n")
             jobfile.write("numjobs=" + str(threads) + "\n")
             jobfile.write("iodepth=" + str(iodepth) + "\n")
             jobfile.write("norandommap=1\n")
@@ -831,7 +848,7 @@ def RunTest(iops_log, seqrand, wmix, bs, threads, iodepth, runtime):
                 AppendFile("log_unix_epoch=0", newjob.name)
 
     cmdline = cmdline + ['--output-format=' + str(fioOutputFormat)]
-
+    print("Run cmd3:", cmdline)
     # There are some NVME drives with 4k physical and logical out there.
     # Check that we can actually do this size IO, OTW return 0 for all
     skiptest = False
